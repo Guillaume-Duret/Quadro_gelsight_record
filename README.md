@@ -1,53 +1,150 @@
+## PART 1: RECORDING WITH QUAD VIEWER
 
-# GelSight Video Visualization Tool
+### Setup and Launch
+
+1. **Activate the environment:**
+    ```bash
+    conda activate gelsight_sdk
+    ```
+
+2. **Navigate to the project directory:**
+    ```bash
+    cd ~/Documents/gsrobotics
+    ```
+
+3. **Launch the Quad Viewer:**
+    ```bash
+    python demo_liveview_ult.py
+    ```
+
+### Recording Workflow
+
+#### Camera Configuration
+
+- **Manual Camera Arrangement:**  
+  After the application starts, manually arrange the 4 camera IDs in the top bar to match the physical arrangement of your GelSight sensors.  
+  The default indices are `[5, 3, 7, 0]`, but you can adjust them if needed.
+
+- **Start All Cameras:**  
+  Click "Start All Cameras" to begin capturing.
+
+#### Setting Reference Frames
+
+- **Set Reference Before Contact:**  
+  Before making any contact with the sensors, click the **"Set Reference Now"** button to capture baseline images.  
+  You'll see **"All references set ✓"** once this is successful.
+
+#### Recording Sessions
+
+1. **Start Recording:**  
+   Click "Start Recording" (the button turns green and changes to "Stop Recording").
+
+2. **Perform Your Experiment:**  
+   Continue your experiment while the cameras capture data.
+
+3. **Stop Recording:**  
+   Once done, click "Stop Recording."
+
+#### Naming Recordings
+
+- A popup will prompt you for a recording name.  
+  - **Descriptive Name (e.g., "Experiment_1_Grasp")**  
+  - **Optional:** Leave it blank for a timestamp-based name.
+
+Click **OK** to save the recording.
+
+#### Repeat as Needed
+
+- Click **"Start Recording"** again for a new session.
+
+### Keyboard Shortcuts (During Recording)
+
+- **SPACE:** Save screenshots of all cameras
+- **R:** Reset reference frames
+- **S:** Set reference frames
+- **T:** Toggle recording (Start/Stop)
+- **D:** Save difference statistics to CSV
+- **Q:** Quit the application
+
+
+
+GelSight Video Visualization Tool
+=================================
 
 Overview
 --------
-The `vizu_video_good.py` script is a comprehensive playback and analysis tool for GelSight recordings. It displays 2x2 sensor arrays with three synchronized views for each sensor: RGB video, Heatmap (difference), and Marker Tracking.
+
+The vizu_video_good.py script is a comprehensive playback and analysis tool for GelSight recordings.
+It displays a 2×2 sensor array with three synchronized views per sensor:
+
+- RGB Video
+- Heatmap (difference from reference)
+- Marker Tracking
+
+--------------------------------------------------
 
 Launching the Visualizer
 ------------------------
-Navigate to project directory:
+
+Navigate to the project directory:
+
     cd ~/Documents/gsrobotics
 
 Run the visualization tool:
+
     python vizu_video_good.py
 
-Optional: Specify custom recording path:
+Optional: Specify a custom recording path:
+
     python vizu_video_good.py --path /path/to/your/recordings
 
+--------------------------------------------------
+
 What the Visualizer Shows
---------------------------
+-------------------------
+
 Display Layout:
-    - 2x2 grid of GelSight sensors (4 total)
-    - Each sensor shows 3 synchronized views:
-        - RGB View: Original camera feed
-        - Heatmap View: Difference from reference (contact visualization)
-        - Marker Tracking View: Optical flow and displacement vectors
+
+- 2×2 grid of GelSight sensors (4 total)
+- Each sensor shows three synchronized views:
+    - RGB View: Original camera feed
+    - Heatmap View: Difference from reference (contact visualization)
+    - Marker Tracking View: Optical flow and displacement vectors
 
 Automatic Rotations:
-    - All cameras: Rotated 90° clockwise (matching live view orientation)
-    - Cameras 1 & 2: Additional 180° rotation (for physical sensor orientation)
+
+- All cameras: Rotated 90° clockwise (matches live-view orientation)
+- Cameras 1 & 2: Additional 180° rotation (corrects physical sensor orientation)
+
+--------------------------------------------------
 
 Key Features
 ------------
-    - Multi-Recording Support: Automatically detects and lists all recordings
-    - Marker Tracking: Uses official SDK tracker or fallback optical flow
-    - Real-time Statistics: Displays displacement metrics for each sensor
-    - Reference Frame Management: Reset references for any frame
-    - Adjustable Parameters: Modify threshold and scale on-the-fly
+
+- Multi-Recording Support: Automatically detects and cycles through recordings
+- Marker Tracking: Uses official SDK tracker with optical-flow fallback
+- Real-Time Statistics: Displays displacement metrics per sensor
+- Reference Frame Management: Reset reference on any frame
+- Adjustable Parameters: Modify heatmap threshold and scale during playback
+
+--------------------------------------------------
 
 Keyboard Controls
 -----------------
-    SPACE: Play/Pause toggle
-    N: Next recording
-    P: Previous recording
-    Q: Quit application
-    R: Reset reference and re-initialize markers
+
+SPACE : Play / Pause
+N     : Next recording
+P     : Previous recording
+R     : Reset reference & re-initialize markers
+Q     : Quit application
+
+--------------------------------------------------
 
 Directory Structure
 -------------------
+
 Default Recording Location:
+
     ~/Desktop/gelsight_recordings/
     ├── recording_20241219_143022/
     │   ├── camera_1.avi
@@ -55,11 +152,19 @@ Default Recording Location:
     │   ├── camera_3.avi
     │   └── camera_4.avi
     ├── Experiment_1_Grasp_20241219_143155/
-    │   └── [similar structure]
+    │   ├── camera_1.avi
+    │   ├── camera_2.avi
+    │   ├── camera_3.avi
+    │   └── camera_4.avi
     └── [other recordings...]
 
-Note: This visualizer is designed to work with recordings created by the GelSight Quad Viewer live script.
+--------------------------------------------------
 
+Notes
+-----
+
+- This visualizer is designed to work only with recordings created by the GelSight Quad Viewer live script.
+- For best marker tracking, press R on a frame where gel markers are clearly visible in the RGB view.
 
 # Gelsight Mini
 
