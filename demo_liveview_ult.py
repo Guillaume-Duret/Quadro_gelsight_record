@@ -287,7 +287,7 @@ class QuadTopBar(BoxLayout):
 
 class CameraThread:
     """Thread for each camera to capture frames without blocking GUI"""
-    def __init__(self, camera_id, video_index, width=640, height=480, border_fraction=0.1):
+    def __init__(self, camera_id, video_index, width=320, height=240, border_fraction=0.15):
         self.camera_id = camera_id
         self.video_index = video_index
         self.width = width
@@ -299,9 +299,10 @@ class CameraThread:
         self.thread = None
         
         # Frame storage - IMPORTANT: GelSightMini returns RGB frames
-        self.current_frame_rgb = None  # RGB for display
-        self.current_diff_rgb = None   # RGB for display
-        self.reference_frame_rgb = None  # RGB for processing
+        self.current_frame_rgb = None  # RGB for display (with transformations)
+        self.current_diff_rgb = None   # RGB for display (with transformations)
+        self.reference_frame_rgb = None  # RGB for processing (with transformations)
+        self.raw_frame_rgb = None  # Raw frame from camera (no transformations) - for marker tracking compatibility
         
         # Statistics
         self.fps = 0.0
@@ -315,7 +316,7 @@ class CameraThread:
         # Control parameters
         self.diff_threshold = 30
         self.diff_scale = 2.0
-        self.zoom_factor = 1.0
+        self.zoom_factor = 1.5
         
         # Thread safety
         self.lock = threading.Lock()
@@ -339,6 +340,10 @@ class CameraThread:
         self.recording_filepath = None
         self.recording_folder = None
         
+        # Store first frame to get actual dimensions after cropping
+        self.actual_height = None
+        self.actual_width = None
+        
     def start(self):
         """Start the camera thread"""
         if self.running:
@@ -357,7 +362,9 @@ class CameraThread:
             
     def _capture_loop(self):
         """Main capture loop running in separate thread"""
-        # Initialize camera
+        # Initialize camera with EXACT same parameters as marker tracker
+        print(f"Camera {self.camera_id}: Initializing with width={self.width}, height={self.height}, border_fraction={self.border_fraction}")
+        
         self.camera = GelSightMini(
             target_width=self.width,
             target_height=self.height,
@@ -377,14 +384,26 @@ class CameraThread:
                 start_time = time.time()
                 
                 try:
-                    # Get frame from camera (GelSightMini returns RGB)
+                    # Get frame from camera (GelSightMini returns RGB, already cropped)
+                    # *** EXACT SAME as marker tracker: camera.update() ***
                     frame_rgb = self.camera.update(1/30.0)
                     
                     if frame_rgb is None:
                         time.sleep(0.01)
                         continue
                     
-                    # Apply transformations
+                    # Store raw frame (identical to what marker tracker sees)
+                    raw_frame = frame_rgb.copy()
+                    
+                    # Store actual dimensions from first frame
+                    if self.actual_height is None or self.actual_width is None:
+                        self.actual_height = frame_rgb.shape[0]
+                        self.actual_width = frame_rgb.shape[1]
+                        print(f"Camera {self.camera_id}: Actual frame dimensions: {self.actual_width}x{self.actual_height}")
+                    
+                    # *** APPLY TRANSFORMATIONS FOR QUAD VIEWER ***
+                    # These transformations are for display only in the quad viewer
+                    # The raw frame remains unchanged for compatibility with marker tracking
                     frame_rgb = cv2.flip(frame_rgb, 1)  # Horizontal mirror
                     if self.camera_id < 3:  # First three cameras rotated 180
                         frame_rgb = cv2.rotate(frame_rgb, cv2.ROTATE_180)
@@ -392,7 +411,7 @@ class CameraThread:
                     # Check for reference control flags
                     with self.lock:
                         if self.set_reference_flag:
-                            # Store reference in RGB format
+                            # Store reference in RGB format (with transformations for display)
                             self.reference_frame_rgb = frame_rgb.copy()
                             self.set_reference_flag = False
                             
@@ -476,16 +495,26 @@ class CameraThread:
                     
                     # Store frames and update statistics
                     with self.lock:
-                        self.current_frame_rgb = display_frame_rgb
-                        self.current_diff_rgb = diff_frame_rgb
+                        self.current_frame_rgb = display_frame_rgb  # With transformations for display
+                        self.current_diff_rgb = diff_frame_rgb  # With transformations
+                        self.raw_frame_rgb = raw_frame  # Without transformations (for marker tracking)
                         self.fps = fps
                         self.frame_count += 1
                     
                     # Recording - convert RGB to BGR for OpenCV video writer
                     with self.lock:
                         if self.recording and self.video_writer is not None:
+                            # For recording, use the frame without zoom (frame_rgb instead of display_frame_rgb)
+                            # Resize to the original dimensions for consistent video size
+                            recording_frame = frame_rgb.copy()
+                            
+                            # Resize to match the video writer dimensions if needed
+                            if (recording_frame.shape[1] != self.width or 
+                                recording_frame.shape[0] != self.height):
+                                recording_frame = cv2.resize(recording_frame, (self.width, self.height))
+                            
                             # Convert RGB to BGR for recording
-                            frame_bgr = cv2.cvtColor(display_frame_rgb, cv2.COLOR_RGB2BGR)
+                            frame_bgr = cv2.cvtColor(recording_frame, cv2.COLOR_RGB2BGR)
                             self.video_writer.write(frame_bgr)
                             self.recording_frame_count += 1
                     
@@ -551,13 +580,13 @@ class CameraThread:
                 filepath = f"camera_{self.camera_id}_recording_{timestamp}.avi"
             
             try:
-                # Create video writer
+                # Use original dimensions (320x240) for consistent video size
                 fourcc = cv2.VideoWriter_fourcc(*'XVID')
                 self.video_writer = cv2.VideoWriter(
                     filepath, 
                     fourcc, 
                     30.0,  # FPS
-                    (self.width, self.height)
+                    (self.width, self.height)  # Use original dimensions (320x240)
                 )
                 self.recording = True
                 self.recording_start_time = datetime.now()
@@ -623,17 +652,24 @@ class CameraThread:
             }
             
     def get_current_frame_rgb(self):
-        """Get current frame in RGB format (thread-safe)"""
+        """Get current frame in RGB format (thread-safe) - WITH transformations for display"""
         with self.lock:
             if self.current_frame_rgb is not None:
                 return self.current_frame_rgb.copy()
             return None
             
     def get_current_diff_rgb(self):
-        """Get current difference frame in RGB format (thread-safe)"""
+        """Get current difference frame in RGB format (thread-safe) - WITH transformations"""
         with self.lock:
             if self.current_diff_rgb is not None:
                 return self.current_diff_rgb.copy()
+            return None
+            
+    def get_raw_frame_rgb(self):
+        """Get raw frame in RGB format (thread-safe) - WITHOUT transformations, identical to marker tracker"""
+        with self.lock:
+            if self.raw_frame_rgb is not None:
+                return self.raw_frame_rgb.copy()
             return None
             
     def get_stats(self):
@@ -660,7 +696,7 @@ class CameraThread:
 
 class CameraManager:
     """Manages multiple camera threads"""
-    def __init__(self, width=640, height=480, border_fraction=0.1, device_mapping=None):
+    def __init__(self, width=320, height=240, border_fraction=0.15, device_mapping=None):
         self.width = width
         self.height = height
         self.border_fraction = border_fraction
@@ -671,6 +707,8 @@ class CameraManager:
         
     def start_cameras(self):
         """Start all camera threads"""
+        print(f"CameraManager: Starting cameras with width={self.width}, height={self.height}, border_fraction={self.border_fraction}")
+        
         for camera_id in range(1, 5):
             video_idx = self.device_mapping.get(camera_id, -1)
             if video_idx < 0:
@@ -1299,7 +1337,7 @@ class DualView2x2LiveViewWidget(BoxLayout):
             if not camera_thread:
                 continue
                 
-            # Get frames from camera thread (already in RGB format)
+            # Get frames from camera thread (WITH transformations for display)
             rgb_frame = camera_thread.get_current_frame_rgb()
             diff_frame = camera_thread.get_current_diff_rgb()
             stats = camera_thread.get_stats()
@@ -1312,7 +1350,13 @@ class DualView2x2LiveViewWidget(BoxLayout):
                 self.update_texture_from_rgb(self.diff_widgets[camera_idx], diff_frame)
             else:
                 # Show waiting message if no difference frame
-                waiting_frame = np.zeros((self.main_app.camera_height, self.main_app.camera_width, 3), dtype=np.uint8)
+                # Use actual frame dimensions for waiting message
+                if rgb_frame is not None:
+                    waiting_frame = np.zeros((rgb_frame.shape[0], rgb_frame.shape[1], 3), dtype=np.uint8)
+                else:
+                    # Default dimensions if no frame yet
+                    waiting_frame = np.zeros((240, 320, 3), dtype=np.uint8)
+                
                 message = "Waiting for reference"
                 color = (255, 255, 255)  # White in RGB
                 
@@ -1452,27 +1496,33 @@ class QuadGelsightMini(App):
         # Flag to track if we should auto-start
         self.auto_start_scheduled = False
         
-        # Default camera parameters
-        self.camera_width = 640
-        self.camera_height = 480
-        self.border_fraction = 0.1
+        # Default camera parameters - EXACTLY from default_config.json
+        self.camera_width = 320      # From your config file
+        self.camera_height = 240     # From your config file
+        self.border_fraction = 0.15  # From your config file
+        
+        print(f"QuadGelsightMini: Using EXACT parameters from config:")
+        print(f"  - camera_width: {self.camera_width}")
+        print(f"  - camera_height: {self.camera_height}")
+        print(f"  - border_fraction: {self.border_fraction}")
         
         # If config is provided, try to extract parameters
         if config:
             try:
-                # Try to access as ConfigParser object
-                self.camera_width = config.getint('camera', 'width')
-                self.camera_height = config.getint('camera', 'height')
-                self.border_fraction = config.getfloat('camera', 'border_fraction')
-            except (AttributeError, KeyError, ValueError):
-                # Try to access as object with attributes
-                try:
+                # Try to access as ConfigModel object (from the second script)
+                # This matches the structure used in demo_markertracker.py
+                if hasattr(config, 'camera_width'):
                     self.camera_width = config.camera_width
+                    print(f"  Override: camera_width = {self.camera_width}")
+                if hasattr(config, 'camera_height'):
                     self.camera_height = config.camera_height
+                    print(f"  Override: camera_height = {self.camera_height}")
+                if hasattr(config, 'border_fraction'):
                     self.border_fraction = config.border_fraction
-                except AttributeError:
-                    # Use defaults
-                    pass
+                    print(f"  Override: border_fraction = {self.border_fraction}")
+            except Exception as e:
+                print(f"Warning: Could not extract config parameters: {e}")
+                print("Using default camera parameters")
 
     def build(self):
         self.title = "Gelsight Mini Quad Viewer - Threaded Version"
@@ -1594,7 +1644,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--gs-config",
         type=str,
-        default=None,
+        default="default_config.json",  # Changed to default to your config file
         help="Path to the JSON configuration file. If not provided, default config is used.",
     )
     
@@ -1615,15 +1665,15 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # Load config if provided
+    # Always load config - default to default_config.json
     config_obj = None
-    if args.gs_config:
-        try:
-            gs_config = GSConfig(args.gs_config)
-            config_obj = gs_config.config
-        except Exception as e:
-            print(f"Warning: Could not load config file: {e}")
-            print("Using default configuration")
+    try:
+        gs_config = GSConfig(args.gs_config)
+        config_obj = gs_config.config
+        print(f"Loaded config from: {args.gs_config}")
+    except Exception as e:
+        print(f"Warning: Could not load config file '{args.gs_config}': {e}")
+        print("Using hardcoded default parameters from default_config.json")
     
     # Add error handling for the main application
     try:
