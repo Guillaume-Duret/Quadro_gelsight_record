@@ -1,3 +1,66 @@
+
+# GelSight Video Visualization Tool
+
+Overview
+--------
+The `vizu_video_good.py` script is a comprehensive playback and analysis tool for GelSight recordings. It displays 2x2 sensor arrays with three synchronized views for each sensor: RGB video, Heatmap (difference), and Marker Tracking.
+
+Launching the Visualizer
+------------------------
+Navigate to project directory:
+    cd ~/Documents/gsrobotics
+
+Run the visualization tool:
+    python vizu_video_good.py
+
+Optional: Specify custom recording path:
+    python vizu_video_good.py --path /path/to/your/recordings
+
+What the Visualizer Shows
+--------------------------
+Display Layout:
+    - 2x2 grid of GelSight sensors (4 total)
+    - Each sensor shows 3 synchronized views:
+        - RGB View: Original camera feed
+        - Heatmap View: Difference from reference (contact visualization)
+        - Marker Tracking View: Optical flow and displacement vectors
+
+Automatic Rotations:
+    - All cameras: Rotated 90° clockwise (matching live view orientation)
+    - Cameras 1 & 2: Additional 180° rotation (for physical sensor orientation)
+
+Key Features
+------------
+    - Multi-Recording Support: Automatically detects and lists all recordings
+    - Marker Tracking: Uses official SDK tracker or fallback optical flow
+    - Real-time Statistics: Displays displacement metrics for each sensor
+    - Reference Frame Management: Reset references for any frame
+    - Adjustable Parameters: Modify threshold and scale on-the-fly
+
+Keyboard Controls
+-----------------
+    SPACE: Play/Pause toggle
+    N: Next recording
+    P: Previous recording
+    Q: Quit application
+    R: Reset reference and re-initialize markers
+
+Directory Structure
+-------------------
+Default Recording Location:
+    ~/Desktop/gelsight_recordings/
+    ├── recording_20241219_143022/
+    │   ├── camera_1.avi
+    │   ├── camera_2.avi
+    │   ├── camera_3.avi
+    │   └── camera_4.avi
+    ├── Experiment_1_Grasp_20241219_143155/
+    │   └── [similar structure]
+    └── [other recordings...]
+
+Note: This visualizer is designed to work with recordings created by the GelSight Quad Viewer live script.
+
+
 # Gelsight Mini
 
 This respository contains python code to connect to the GelSight Mini hardware. The code demonstrates basic functionalities, such as viewing and saving data (e.g., images and video) from these devices, depth estimation, 3D point cloud and marker tracking. Any further information about Gelsight can be found on [gelsight.com](https://www.gelsight.com/)
